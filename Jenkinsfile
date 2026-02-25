@@ -37,6 +37,11 @@ pipeline {
                     pytest --junitxml=report.xml
                 '''
             }
+            post {
+                always {
+                    junit 'report.xml'
+                }
+            }
         }
 
         stage('Build Artifact') {
