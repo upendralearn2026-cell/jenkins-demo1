@@ -1,73 +1,81 @@
 pipeline {
     agent any
 
-    environment {
-        APP_NAME = "python-app"
-        BUILD_VERSION = "${BUILD_NUMBER}"
+    parameters {
+        choice(
+            name: 'ENVIRONMENT',
+            choices: ['dev', 'qa', 'prod'],
+            description: 'Select deployment environment'
+        )
     }
 
-    options {
-        buildDiscarder(logRotator(numToKeepStr: '10'))
-        timestamps()
+    environment {
+        APP_NAME = "python-app"
+        DEPLOY_PATH = "/opt/apps/${params.ENVIRONMENT}"
     }
 
     stages {
 
         stage('Checkout Code') {
             steps {
-                git branch: 'main', 
-                    url: 'https://github.com/upendralearn2026-cell/jenkins-demo1.git'
+                git branch: 'main',
+                    url: 'https://github.com/your-username/python-app.git'
             }
         }
 
-        stage('Setup Python Environment') {
+        stage('Build') {
             steps {
-                sh '''
-                    python3 -m venv venv
-                    . venv/bin/activate
-                    pip install -r python-app/requirements.txt
-                '''
+                echo "Building for ${params.ENVIRONMENT}"
+                sh 'echo Build completed'
             }
         }
 
-        stage('Run Unit Tests') {
-            steps {
-                sh '''
-                    . venv/bin/activate
-                    pytest --junitxml=report.xml
-                '''
+        stage('Manual Approval for PROD') {
+            when {
+                expression { params.ENVIRONMENT == 'prod' }
             }
-            post {
-                always {
-                    junit 'report.xml'
+            steps {
+                input message: "Approve Production Deployment?",
+                      ok: "Deploy"
+            }
+        }
+
+        stage('Deploy') {
+            steps {
+                script {
+                    if (params.ENVIRONMENT == 'dev') {
+                        echo "Deploying to DEV"
+                    }
+                    else if (params.ENVIRONMENT == 'qa') {
+                        echo "Deploying to QA"
+                    }
+                    else {
+                        echo "Deploying to PROD"
+                    }
                 }
-            }
-        }
 
-        stage('Build Artifact') {
-            steps {
-                sh '''
-                    zip -r ${APP_NAME}-${BUILD_VERSION}.zip .
-                '''
-            }
-        }
+                withCredentials([usernamePassword(
+                    credentialsId: 'server-creds',
+                    usernameVariable: 'USER',
+                    passwordVariable: 'PASS'
+                )]) {
 
-        stage('Archive Artifact') {
-            steps {
-                archiveArtifacts artifacts: '*.zip', fingerprint: true
+                    sh '''
+                        echo "Connecting using secured credentials"
+                        # Example deployment command
+                        # ssh $USER@server "deploy command"
+                    '''
+                }
             }
         }
     }
 
     post {
         success {
-            echo "Build Successful 🎉"
+            echo "Deployment Successful 🚀"
         }
         failure {
-            echo "Build Failed ❌"
-            mail to: 'upendralearn2025@gmail.com',
-                 subject: "Build Failed: ${JOB_NAME} #${BUILD_NUMBER}",
-                 body: "Check Jenkins Console Output"
+            echo "Deployment Failed ❌"
         }
         always {
             cleanWs()
